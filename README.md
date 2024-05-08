@@ -1,1 +1,1 @@
-# -ESRD-Capstone-Project
+Built a synthetic EMR database containing over 6 million records in SQL to develop a dashboard that tracks the monthly census of ESRD patients and the % of the cohort meeting lab targets on their first sodium, calcium, albumin, and BUN labs drawn each month.

@@ -1,0 +1,164 @@
+/*1.Inclusion Criteria-Here we pull all of the patients who had an encounter between 2021 and 2022.
+These are our active patients. We do this to remove patients from the final query who
+may have received care years ago, but may have moved to a different city,state,etc.
+*/ 
+
+with active_pats as
+(
+select distinct patient
+from postgres.public.encounters
+where start between '2022-01-01 00:00' and '2022-12-31 23:59'
+),
+
+/*2.Exclusion Criteria-Transplant cases, will use this CTE to kick them out of the
+ESRD cohort later.*/
+transplants as
+(
+select *
+from postgres.public.procedures
+where code = '55.69'
+),
+
+esrd as 
+(
+select cond.start as condition_start,
+	   cond.stop as condition_stop,
+	   cond.patient,
+	   least(trp.start,cond.stop,pat.deathdate,'2099-01-01') as esrd_end_date,
+	   trp.start as kidney_transplant_date,
+	   pat.race,
+	   pat.first,
+	   pat.last,
+	   pat.birthdate,
+	   pat.deathdate,
+	   pat.city,
+	   pat.state,
+	   pat.county,
+	   floor(extract(EPOCH from age('2022-12-31 23:59',pat.birthdate))/31536000) as age
+	 from postgres.public.conditions as cond
+ join postgres.public.patients as pat
+ on cond.patient = pat.id
+left join transplants as trp
+ on cond.patient = trp.patient
+join active_pats as act
+on cond.patient = act.patient
+ where cond.code = '585.6'
+ and (cond.stop between '2022-01-01 00:00' and '2022-12-31 23:59'
+	  or cond.start between '2022-01-01 00:00' and '2022-12-31 23:59'
+	  or (cond.start < '2022-01-01 00:00' and cond.stop is null)
+	  or (cond.start < '2022-01-01 00:00' and cond.stop > '2022-12-31 23:59')
+	  )
+and (pat.deathdate is null or pat.deathdate > '2022-01-01')
+and (trp.start is null or trp.start > '2022-01-01')
+),
+ 
+obs_dates as
+(
+select cast('2022-01-01' as date) as obs_date
+union
+select cast('2022-02-01' as date) as obs_date
+union
+select cast('2022-03-01' as date) as obs_date
+union
+select cast('2022-04-01' as date) as obs_date
+union
+select cast('2022-05-01' as date) as obs_date
+union
+select cast('2022-06-01' as date) as obs_date
+union
+select cast('2022-07-01' as date) as obs_date
+union
+select cast('2022-08-01' as date) as obs_date
+union
+select cast('2022-09-01' as date) as obs_date
+union
+select cast('2022-10-01' as date) as obs_date
+union
+select cast('2022-11-01' as date) as obs_date
+union
+select cast('2022-12-01' as date) as obs_date
+),
+
+prep as
+(
+select obs.obs_date,
+	   esrd.condition_start,
+	   esrd.condition_stop,
+	   esrd.patient,
+	   esrd.kidney_transplant_date,
+	   esrd.race,
+	   esrd.first,
+	   esrd.last,
+	   esrd.birthdate,
+	   esrd.deathdate,
+	   esrd.city,
+	   esrd.state,
+	   esrd.county,
+	   esrd.age
+from obs_dates as obs
+join esrd
+on obs.obs_date between esrd.condition_start and esrd.esrd_end_date
+),
+
+labs as
+(select patient,
+        date as lab_date,
+        date_trunc('month',date) as month,
+        code,
+        description,
+        value,
+        row_number() over (partition by patient,code, date_trunc('month',date)  order by date ) as nth_lab
+from observations
+where code in ('49765-1','2947-0','1751-7','6299-2')
+and date between '2022-01-01 00:00' and '2022-12-31 23:59'
+),
+
+final as
+(select distinct
+        prep.obs_date,
+	    prep.condition_start,
+	    prep.condition_stop,
+	    prep.patient,
+	    prep.kidney_transplant_date,
+	    prep.race,
+	    prep.first,
+	    prep.last,
+	    prep.birthdate,
+	    prep.deathdate,
+	    prep.city,
+	    prep.state,
+	    prep.county,
+	    prep.age,
+        ca.value as calcium_value,
+        na.value as sodium_value,
+        alb.value as albumin_value,
+        bun.value as bun_value
+from prep
+left join labs as ca
+on prep.patient = ca.patient
+and prep.obs_date = ca.month
+and ca.nth_lab = 1
+and ca.code = '49765-1'
+left join labs as na
+on prep.patient = na.patient
+and prep.obs_date = na.month
+and na.nth_lab = 1
+and na.code = '2947-0'
+left join labs as alb
+on prep.patient = alb.patient
+and prep.obs_date = alb.month
+and alb.nth_lab = 1
+and alb.code = '1751-7'
+left join labs as bun
+on prep.patient = bun.patient
+and prep.obs_date = bun.month
+and bun.nth_lab = 1
+and bun.code = '6299-2')
+
+select obs_date,
+       patient,
+	   count(*)
+from final
+group by obs_date,
+         patient
+having count(*) > 1 

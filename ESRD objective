@@ -1,0 +1,41 @@
+Objective: to look at our monthly census of ESRD patients in the year 2022, and analyze their lab values on a monthly basis for:
+•	Calcium
+•	Sodium
+•	Albumin
+•	Blood Urea Nitrogen
+We want to be able to track whenever a patient either did not get their lab work done for a given month or failed to meet a target. We also want to see what percentage of our cohort met the organizational goals, and if we are trending in the right direction with these lab values.
+This will allow us to reach out to patients struggling to meet their lab value targets, and possibly provide them with resources to ensure they are getting adequate dialysis treatment (transport, education, etc.)
+Relevant Metrics:
+•	Kidney Transplant Dates (If Applicable)
+•	First Calcium level for patient each month (Lab code = 49765-1)
+•	First Sodium level for patient each month (Lab code = 2947-0)
+•	First Albumin level for patient each month (Lab Code = 1751-7)
+•	First BUN level for patient each month (Lab Code = 6299-2)
+•	% of Patient’s meeting target for each of the above lab values (they did not meet target if they were out of range of the target values OR failed to get a lab drawn for that month)
+o	Calcium: 50%, 8.4 to 9.4.
+o	Sodium: 75%, >=137
+o	Albumin: 60%, >= 4
+o	BUN: 80%, 5 and 20
+•	Race
+•	Age
+•	Patient Full Name, and geographic info
+•	Death Date
+
+Inclusion Criteria:
+•	Patients with ICD9 dx of: 585.6 (ESRD dxs)
+•	ESRD must have been an active condition for the patients at some point in 2022
+•	Patient must have been active, must have had an encounter in the years 2022 or 2021
+•	Months where patient was alive
+Exclusion Criteria:
+•	Months where patient received kidney transplant (procedure code = 55.69)
+Granularity
+Patient Months Combination
+Hints:
+1.	You are going to need to construct a list of 12 rows each containing truncated moths (1/1/2022, 2/1/2022, etc) to join to your ESRD patient list to have
+2.	BUT, not all the patients are going to have ESRD for exactly 12 months. Some will have ESRD for just 3 months. Some will have ESRD for a couple months. Get better, and then have it again for another couple of months. Etc.
+3.	So to address #2, you will need to have a column that tracks when ESRD started for the patient, as well as and end date that tracks the earliest of:
+a.	Death
+b.	Transplant
+c.	ESRD end point
+d.	If the end date for esrd is null, and the patient hasn’t died, or had a kidney transplant, need to have the null be some far off datapoint like ‘2099-01-01’, so that the join can still happen between the ESRD activity periods and the list of months that we built in step #1
+4.	Setting up this column will help us create a join where the start and end points of the ESRD can link up with the truncated dates list to create patient months
